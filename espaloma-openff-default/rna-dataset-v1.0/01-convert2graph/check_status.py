@@ -30,7 +30,7 @@ def load_from_qcarchive(kwargs):
         for i in range(len(recs[0])):
             rid = recs[0].iloc[i].record.id
             smi = recs[0].iloc[i].name
-            nb = [ s for s in smi if s == "." ]
+            nb = [ s for s in smi if s == "." ]    # check if the entry is a trinucleotide, base pair, or base triple based on the number of "." found in the smiles string
 
             if recs[0].iloc[i].record.status == 'COMPLETE' and recs[1].iloc[i].record.status == 'COMPLETE':
                 f = os.path.join("entries", str(i), "mydata", "0")
@@ -43,8 +43,9 @@ def load_from_qcarchive(kwargs):
                 else:
                     print("{:4d} \t status:COMPLETE   \t calc:FAILED  \t # of mols in record:{}".format(i, len(nb)+1))
                     # write entry id to redo calculation
-                    if len(nb) + 1 == 1:
-                        wf.write("{}\n".format(str(i)))
+                    #if len(nb) + 1 == 1:
+                    #    wf.write("{}\n".format(str(i)))
+                    wf.write("{}\n".format(str(i)))
             else:
                 print("{:4d} \t status:INCOMPLETE \t calc:INVALID \t # of mols in record:{}".format(i, len(nb)+1))
 

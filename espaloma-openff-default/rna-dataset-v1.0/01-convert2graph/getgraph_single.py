@@ -4,6 +4,8 @@ import os, sys
 import numpy as np
 import torch
 import espaloma as esp
+from espaloma.units import *
+from espaloma.data.md import *
 import qcportal as ptl
 import click
 import pickle
@@ -16,10 +18,14 @@ from matplotlib import pyplot as plt
 
 
 
-def get_graph(mol, energy, grad):
+def get_graph(mol, energy, grad, nbtype):
     offmol = Molecule.from_qcschema(mol, allow_undefined_stereo=True)
-    offmol.compute_partial_charges_am1bcc()   # https://docs.openforcefield.org/projects/toolkit/en/0.9.2/api/generated/openff.toolkit.topology.Molecule.html
-    charges = offmol.partial_charges.value_in_unit(esp.units.CHARGE_UNIT)
+    
+    # skip charge calculation if molecule is not a single molecule
+    if nbtype == "trinucleotide":
+        offmol.compute_partial_charges_am1bcc()   # https://docs.openforcefield.org/projects/toolkit/en/0.9.2/api/generated/openff.toolkit.topology.Molecule.html
+        charges = offmol.partial_charges.value_in_unit(esp.units.CHARGE_UNIT)
+    
     g = esp.Graph(offmol)
     
     # energy is already hartree
@@ -60,9 +66,12 @@ def get_graph(mol, energy, grad):
         dim=1,
     )
     
-    g.nodes['n1'].data['q_hat'] = c = torch.tensor(charges, dtype=torch.get_default_dtype(),).unsqueeze(-1)
+    if nbtype == "trinucleotide":
+        g.nodes['n1'].data['q_hat'] = torch.tensor(charges, dtype=torch.get_default_dtype(),).unsqueeze(-1)
+
     
-    return g, offmol
+    #return g, offmol
+    return g
 
 
 
@@ -101,19 +110,41 @@ def load_from_qcarchive(kwargs):
         _grad2 = recs[1].iloc[i].record.return_result
         grad = _grad1 + _grad2
 
-        g, offmol = get_graph(mol, energy, grad)
-        gs.append(g)            
-        ds = esp.data.dataset.GraphDataset(gs)
-        ds.save(output_prefix)        
-    else:
-        offmol = Molecule.from_qcschema(mol, allow_undefined_stereo=True)
-        offmol.compute_partial_charges_am1bcc()
+        # check number of "." found in smiles string
+        smi = recs[0].iloc[i].name
+        nb = [ s for s in smi if s == "." ]
+
+        if len(nb) == 0:
+            nbtype = "trinucleotide"
+        elif len(nb) == 1:
+            nbtype = "basepair"
+        elif len(nb) == 2:
+            nbtype = "basetriple"
+        else:
+            raise ValueError("unknown nbtype")
+
+        #g, offmol = get_graph(mol, energy, grad, nbtype)
+        g = get_graph(mol, energy, grad, nbtype)
+        #gs.append(g)            
+        #ds = esp.data.dataset.GraphDataset(gs)
+        #ds.save(output_prefix)
+        g.save(output_prefix)
 
 
-    # save offmol with charges
-    rid = recs[1].iloc[i].record.id
-    with open(os.path.join(output_prefix, 'offmol_{}.pkl'.format(rid)), 'wb') as pkl:
-        pickle.dump(offmol, pkl, protocol=4)
+        # subtract nonbonded
+        if nbtype == "trinucleotide":
+            e1 = g.nodes['g'].data['u_ref'].item()
+            g = subtract_nonbonded_force(g, forcefield="gaff-1.81", subtract_charges=True)   # default: forcefield=gaff-1.81
+            e2 = g.nodes['g'].data['u_ref'].item()
+            print("{} (before) / {} (after)".format(e1, e2), file=sys.stdout)
+            g.save(os.path.join(output_prefix, "subtract-nonbonded"))
+
+
+    # save offmol
+    #rid = recs[1].iloc[i].record.id
+    #with open(os.path.join(output_prefix, 'offmol_{}.pkl'.format(rid)), 'wb') as pkl:
+    #with open(os.path.join("offmols", 'offmol_{}.pkl'.format(rid)), 'wb') as pkl:
+    #    pickle.dump(offmol, pkl, protocol=4)
 
 
 

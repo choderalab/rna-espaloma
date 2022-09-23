@@ -33,7 +33,7 @@ def load_from_qcarchive(kwargs):
             nb = [ s for s in smi if s == "." ]    # check if the entry is a trinucleotide, base pair, or base triple based on the number of "." found in the smiles string
 
             if recs[0].iloc[i].record.status == 'COMPLETE' and recs[1].iloc[i].record.status == 'COMPLETE':
-                f = os.path.join("entries", str(i), "mydata", "0")
+                f = os.path.join("entries", str(i), "mydata")
                 molfile = os.path.join(f, "mol.json")
                 heterograph = os.path.join(f, "heterograph.bin")
                 homograph = os.path.join(f, "homograph.bin")

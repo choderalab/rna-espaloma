@@ -67,7 +67,7 @@ def get_graph(mol, energy, grad, nbtype):
     )
     
     if nbtype == "trinucleotide":
-        g.nodes['n1'].data['q_hat'] = torch.tensor(charges, dtype=torch.get_default_dtype(),).unsqueeze(-1)
+        g.nodes['n1'].data['q_ref'] = torch.tensor(charges, dtype=torch.get_default_dtype(),).unsqueeze(-1)
 
     
     #return g, offmol
@@ -86,6 +86,7 @@ def load_from_qcarchive(kwargs):
     program = kwargs["program"]
     keywords = kwargs["keywords"]
     i = kwargs["entry_id"]
+    gaff_version = kwargs["gaff"]
 
 
     collection_type = kwargs["collection_type"]
@@ -134,7 +135,9 @@ def load_from_qcarchive(kwargs):
         # subtract nonbonded
         if nbtype == "trinucleotide":
             e1 = g.nodes['g'].data['u_ref'].item()
-            g = subtract_nonbonded_force(g, forcefield="gaff-1.81", subtract_charges=True)   # default: forcefield=gaff-1.81
+            #g = subtract_nonbonded_force(g, forcefield="gaff-1.81", subtract_charges=True)   # default: forcefield=gaff-1.81
+            #g = subtract_nonbonded_force(g, forcefield="gaff-2.11", subtract_charges=True)   # default: forcefield=gaff-1.81
+            g = subtract_nonbonded_force(g, forcefield=gaff_version, subtract_charges=True)   # default: forcefield=gaff-1.81
             e2 = g.nodes['g'].data['u_ref'].item()
             print("{} (before) / {} (after)".format(e1, e2), file=sys.stdout)
             g.save(os.path.join(output_prefix, "subtract-nonbonded"))
@@ -158,6 +161,7 @@ def load_from_qcarchive(kwargs):
 @click.option("--program", default="psi4", required=True, help="program to query on (default: psi4)")
 @click.option("--keywords", default="default", help="option token desired")
 @click.option("--entry_id", default=0, help="first entry id to start searching the data")
+@click.option("--gaff", default="gaff-1.81", help="gaff version (default: gaff-1.81")
 def cli(**kwargs):
     print(kwargs)
     load_from_qcarchive(kwargs)

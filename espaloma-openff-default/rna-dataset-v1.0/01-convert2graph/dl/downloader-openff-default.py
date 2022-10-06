@@ -95,11 +95,11 @@ for subset in config['subsets']:
         n = name.split('.')
         group.create_dataset('rna_type', data=[mydict[str(len(n))]], dtype=h5py.string_dtype())
         
-        if max_force is not None:
-            force = np.array([vars['DFT TOTAL GRADIENT'] for vars in qcvars])
-            samples = [i for i in range(len(molecules)) if np.max(np.abs(force[i])) <= max_force]
-            molecules = [molecules[i] for i in samples]
-            qcvars = [qcvars[i] for i in samples]
+        #if max_force is not None:
+        #    force = np.array([vars['DFT TOTAL GRADIENT'] for vars in qcvars])
+        #    samples = [i for i in range(len(molecules)) if np.max(np.abs(force[i])) <= max_force]
+        #    molecules = [molecules[i] for i in samples]
+        #    qcvars = [qcvars[i] for i in samples]
 
         # conformations
         ds = group.create_dataset('conformations', data=np.array([m.geometry for m in molecules]), dtype=np.float32)

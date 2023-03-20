@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 # coding: utf-8
-
 import os, sys, shutil
 import pathlib
 import glob as glob
@@ -22,10 +21,9 @@ from pdbfixer import PDBFixer
 from mdtraj.reporters import NetCDFReporter
 
 
-
 def create_position_restraint(position, restraint_atom_indices):
     """
-    heavy atom restraint
+    Heavy atom restraint
     """
     force = CustomExternalForce("k*((x-x0)^2+(y-y0)^2+(z-z0)^2)")
     force.addGlobalParameter("k", 10.0*kilocalories_per_mole/angstroms**2)
@@ -36,7 +34,6 @@ def create_position_restraint(position, restraint_atom_indices):
         atom_crd = position[i]
         force.addParticle(i, atom_crd.value_in_unit(nanometers))
     return force
-
 
 
 def export_xml(simulation, system):
@@ -86,14 +83,6 @@ def run(**options):
     checkpoint_frequency = 250000  # 1ns
     logging_frequency = 25000  # 100ps
     netcdf_frequency = 25000  # 100ps
-
-    # test
-    #nsteps_min = 100
-    #nsteps_eq = 100
-    #nsteps_prod = 5000
-    #checkpoint_frequency = 10
-    #logging_frequency = 10
-    #netcdf_frequency = 10
     
     platform = mmtools.utils.get_fastest_platform()
     platform_name = platform.getName()
@@ -105,7 +94,6 @@ def run(**options):
     else:
         #raise Exception("fastest platform is not CUDA")
         warnings.warn("fastest platform is not CUDA")
-
 
     # Deserialize system file and load system
     with open(os.path.join(restart_prefix, 'system.xml'), 'r') as f:
@@ -126,22 +114,36 @@ def run(**options):
     simulation.context.setState(state)
 
 
-    # define reporter
-    #simulation.reporters.append(PDBReporter('/Users/takabak/Desktop/dump.pdb', options["netcdf_frequency"]))
-    simulation.reporters.append(NetCDFReporter(os.path.join(output_prefix, 'traj.nc'), netcdf_frequency))
+    #
+    # Define reporter
+    #
+
+    # Select atoms to save
+    atom_indices = []
+    top = md.load_pdb(os.path.join(restart_prefix, 'state.pdb'))
+    res = [ r for r in top.topology.residues if r.name not in ("HOH", "NA", "CL") ]
+    for r in res:
+        for a in r.atoms:
+            atom_indices.append(a.index)
+
+    # Define reporter
+    simulation.reporters.append(NetCDFReporter(os.path.join(output_prefix, 'traj.nc'), netcdf_frequency, atomSubset=atom_indices))
+    #simulation.reporters.append(NetCDFReporter(os.path.join(output_prefix, 'traj.nc'), netcdf_frequency))
     simulation.reporters.append(CheckpointReporter(os.path.join(output_prefix, 'checkpoint.chk'), checkpoint_frequency))
     simulation.reporters.append(StateDataReporter(os.path.join(output_prefix, 'reporter.log'), logging_frequency, step=True, potentialEnergy=True, kineticEnergy=True, totalEnergy=True, temperature=True, volume=True, density=True, speed=True))
 
-    # minimization (skip)
+    # Minimization
     restraint_atom_indices = [ a.index for a in pdb.topology.atoms() if a.residue.name in ['A', 'C', 'U', 'T'] and a.element.symbol != 'H' ]
     restraint_index = system.addForce(create_position_restraint(pdb.positions, restraint_atom_indices))
+    simulation.minimizeEnergy(maxIterations=nsteps_min)
+    minpositions = simulation.context.getState(getPositions=True).getPositions()    
+    PDBFile.writeFile(pdb.topology, minpositions, open(os.path.join(output_prefix, 'min.pdb'), 'w'))   
 
-    #simulation.minimizeEnergy(maxIterations=nsteps_min)
-    #minpositions = simulation.context.getState(getPositions=True).getPositions()    
-    #PDBFile.writeFile(pdb.topology, minpositions, open(os.path.join(output_prefix, 'min.pdb'), 'w'))   
 
-
+    #
     # Equilibration
+    #
+
     # Heating
     n = 50
     for i in range(n):
@@ -159,12 +161,9 @@ def run(**options):
     system.addForce(MonteCarloBarostat(pressure, temperature))
     simulation.context.reinitialize(preserveState=True)
     simulation.step(nsteps_prod)
-
-    """
-    Export state in xml format
-    """
+    
+    # Export state in xml format
     export_xml(simulation, system)
-
 
 
 @click.command()
@@ -173,7 +172,6 @@ def run(**options):
 @click.option('--output_prefix', '-o', default=".", help='path to output files')
 def cli(**kwargs):
     run(**kwargs)
-
 
 
 if __name__ == "__main__":

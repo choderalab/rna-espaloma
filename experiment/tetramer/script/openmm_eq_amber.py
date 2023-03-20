@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 # coding: utf-8
-
 import os, sys, shutil
 import pathlib
 import glob as glob
@@ -22,10 +21,9 @@ from pdbfixer import PDBFixer
 from mdtraj.reporters import NetCDFReporter
 
 
-
 def create_position_restraint(position, restraint_atom_indices):
     """
-    heavy atom restraint
+    Heavy atom restraint
     """
     force = CustomExternalForce("k*((x-x0)^2+(y-y0)^2+(z-z0)^2)")
     force.addGlobalParameter("k", 10.0*kilocalories_per_mole/angstroms**2)
@@ -36,7 +34,6 @@ def create_position_restraint(position, restraint_atom_indices):
         atom_crd = position[i]
         force.addParticle(i, atom_crd.value_in_unit(nanometers))
     return force
-
 
 
 def export_xml(simulation, system):
@@ -105,9 +102,10 @@ def run(**options):
         warnings.warn("fastest platform is not CUDA")
 
 
-    """
-    define force field and water model
-    """
+    # 
+    # Define force field and water model
+    # 
+
     # 3 point water model
     if water_model == 'tip3p':
         water_model='tip3p'
@@ -125,7 +123,6 @@ def run(**options):
         #       /home/takabak/mambaforge/envs/openmmforcefields-dev/lib/python3.9/site-packages/openmmforcefields-0.11.0+64.gd78f2b8.dirty-py3.9.egg/openmmforcefields/ffxml/amber/ions
         water_model='tip3p'
         ff = ForceField('amber/RNA.OL3.xml', 'amber/protein.ff14SB.xml', 'amber/opc3_standard.xml')
-    
     # 4 point water model
     elif water_model == 'tip4pew':
         water_model='tip4pew'
@@ -138,9 +135,10 @@ def run(**options):
         ff = ForceField('amber/RNA.OL3.xml', 'amber/protein.ff14SB.xml', 'amber/opc_standard.xml')
 
 
-    """
-    create system
-    """
+    # 
+    # Create system
+    # 
+
     # pdbfixer: fix structure if necessary
     fixer = PDBFixer(filename=inputfile)
     fixer.findMissingResidues()
@@ -151,34 +149,43 @@ def run(**options):
     fixer.addMissingHydrogens(7.0)  # default: 7
     PDBFile.writeFile(fixer.topology, fixer.positions, open('pdbfixer.pdb', 'w'))
 
-    # solvate system
+    # Solvate system
     modeller = Modeller(fixer.topology, fixer.positions)
     modeller.addSolvent(ff, model=water_model, padding=box_padding, ionicStrength=salt_conc)
     PDBFile.writeFile(modeller.topology, modeller.positions, file=open('solvated.pdb', 'w'))
 
-    # create system
+    # Create system
     system = ff.createSystem(modeller.topology, nonbondedMethod=PME, nonbondedCutoff=nb_cutoff, constraints=HBonds, rigidWater=True, hydrogenMass=hmass)
     integrator = LangevinMiddleIntegrator(temperature, 1/picosecond, timestep)
     simulation = Simulation(modeller.topology, system, integrator)
     simulation.context.setPositions(modeller.positions)
 
+    # Select atoms to save
+    atom_indices = []
+    top = md.load_pdb('solvated.pdb')
+    res = [ r for r in top.topology.residues if r.name not in ("HOH", "NA", "CL") ]
+    for r in res:
+        for a in r.atoms:
+            atom_indices.append(a.index)
 
-    # define reporter
-    #simulation.reporters.append(PDBReporter('/Users/takabak/Desktop/dump.pdb', options["netcdf_frequency"]))
-    simulation.reporters.append(NetCDFReporter(os.path.join(output_prefix, 'traj.nc'), netcdf_frequency))
+    # Define reporter
+    simulation.reporters.append(NetCDFReporter(os.path.join(output_prefix, 'traj.nc'), netcdf_frequency, atomSubset=atom_indices))
+    #simulation.reporters.append(NetCDFReporter(os.path.join(output_prefix, 'traj.nc'), netcdf_frequency))
     simulation.reporters.append(CheckpointReporter(os.path.join(output_prefix, 'checkpoint.chk'), checkpoint_frequency))
     simulation.reporters.append(StateDataReporter(os.path.join(output_prefix, 'reporter.log'), logging_frequency, step=True, potentialEnergy=True, kineticEnergy=True, totalEnergy=True, temperature=True, volume=True, density=True, speed=True))
 
-    # minimization
+    # Minimization
     restraint_atom_indices = [ a.index for a in modeller.topology.atoms() if a.residue.name in ['A', 'C', 'U', 'T'] and a.element.symbol != 'H' ]
     restraint_index = system.addForce(create_position_restraint(modeller.positions, restraint_atom_indices))
-
     simulation.minimizeEnergy(maxIterations=nsteps_min)
     minpositions = simulation.context.getState(getPositions=True).getPositions()    
     PDBFile.writeFile(modeller.topology, minpositions, open(os.path.join(output_prefix, 'min.pdb'), 'w'))   
 
 
+    # 
     # Equilibration
+    # 
+
     # Heating
     n = 50
     for i in range(n):
@@ -197,11 +204,8 @@ def run(**options):
     simulation.context.reinitialize(preserveState=True)
     simulation.step(nsteps_prod)
 
-    """
-    Export state in xml format
-    """
+    # Export state in xml format
     export_xml(simulation, system)
-
 
 
 @click.command()
@@ -210,7 +214,6 @@ def run(**options):
 @click.option('--output_prefix', '-o', default=".", help='path to output files')
 def cli(**kwargs):
     run(**kwargs)
-
 
 
 if __name__ == "__main__":

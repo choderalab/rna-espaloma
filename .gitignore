@@ -1,9 +1,21 @@
-**_obsolete**
-**.ipynb_checkpoints**
-**.nc**
-**.pt**
-**.chk**
-**.prj**
-**.log**
+# Jupyter checkpoint notebook
+experiment/**.ipynb_checkpoints**
 
+# MD trajectory and checkpoint data
+experiment/**.nc**
+experiment/**.chk**
 
+# Espaloma net model
+experiment/**.pt**
+
+# Maestro project
+experiment/**.prj**
+
+# Log files
+experiment/**.log**
+
+# Arhived/debug directory
+experiment/*.archived
+
+# Obsolete data
+experiment/**obsolete**

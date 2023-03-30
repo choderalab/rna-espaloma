@@ -13,9 +13,12 @@ experiment/**.prj**
 
 # Log files
 experiment/**.log**
+experiment/**stdout**
+experiment/**stderr**
 
 # Arhived/debug directory
 experiment/*.archived
+experiment/debug
 
 # Obsolete data
 experiment/**obsolete**

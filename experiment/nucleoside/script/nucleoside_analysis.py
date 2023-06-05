@@ -22,7 +22,7 @@ import warnings
 import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.ticker import MultipleLocator, FormatStrFormatter, AutoMinorLocator
-import seaborn as sns
+#import seaborn as sns
 import barnaba as bb
 from barnaba import definitions
 from barnaba.nucleic import Nucleic
@@ -60,9 +60,9 @@ UNIT_PS_TO_NS = 1/1000
 STRIDE = 10               # Only read every stride-th frame. Each frame is saved 100 ps.
 
 
-#water_models = ["tip3p", "tip3pfb", "spce", "tip4pew", "tip4pfb", "opc"]
-water_models = ["tip3p"]
-
+water_models = ["tip3p", "tip3pfb", "spce", "tip4pew", "tip4pfb", "opc"]
+#water_models = ["tip3p", "opc"]
+#water_models = ["tip3p"]
 
 
 def radian_to_degree(a):    
@@ -219,31 +219,12 @@ def plot(PLOT_TITLE):
 def run(PLOT_TITLE):
     result_dict = {}
     for i, water_model in enumerate(water_models):
-        print(">analyze {}".format(water_model))
+        print("# {}".format(water_model))
+        print("-------------")
         
         # load data
         init_pdb, init_traj, eq_traj, traj = load_data(water_model)
         
-        # =================
-        # anti/syn fraction
-        # =================
-        #if PLOT_TITLE.upper().startswith("C") or PLOT_TITLE.upper().startswith("U"):
-        #    atom_indices = init_traj.topology.select("name H5 or name H6")
-        #    atom_indices = atom_indices.reshape(1,2)
-        #    d = mdtraj.compute_distances(traj, atom_indices) * UNIT_NM_TO_ANGSTROMS
-        #    d_anti = 3.48
-        #    d_syn = 2.12
-        #    a = d_syn**6 - d_anti**6
-        #    b = ((d_syn * d_anti)/d.mean())**6
-        #    anti = 100 * (1/a) * (b - d_anti**6)
-        #    syn = 100 - anti
-        #    print("anti: {:.2f}".format(anti))
-        #    print("syn: {:.2f}".format(syn))
-        #else:
-        #    anti = -1
-        #    syn = -1
-
-
         # ==========
         # J coupling
         # ==========
@@ -260,16 +241,6 @@ def run(PLOT_TITLE):
         print("J23: {:.2f}+-{:.2f}".format(j23, j23_std))
         print("J34: {:.2f}+-{:.2f}".format(j34, j34_std))
         
-
-        # ==============================
-        # C3'-endo and C2'-endo fraction
-        # ==============================
-        #c3 = 100*(j34/(j12+j34))
-        #c2 = 100 - c3
-        #print("C3'-endo: {:.2f}".format(c3))
-        #print("C2'-endo: {:.2f}".format(c2))
-
-
         # ===========================
         # RNA backbone: Consensus all-angle conformers and modular string nomenclature (an RNA Ontology Consortium contribution), RNA, 2008
         # doi: 10.1261/rna.657708
@@ -298,8 +269,6 @@ def run(PLOT_TITLE):
         print("high_anti: {:.2f}".format(high_anti))
         print("not_syn_anti {:.2f}".format(not_syn_anti))
 
-
-
         angles_p, rr = bb.pucker_rao_traj(traj)
         angles_p = radian_to_degree(angles_p)
 
@@ -319,7 +288,7 @@ def run(PLOT_TITLE):
         not_c2_c3 = 100 * not_c2_c3/n
         print("c3: {:.2f}".format(c3))
         print("c2: {:.2f}".format(c2))
-        print("not_c2_c3: {:.2f}".format(not_c2_c3))
+        print("not_c2_c3: {:.2f}\n".format(not_c2_c3))
 
         
         
@@ -329,6 +298,29 @@ def run(PLOT_TITLE):
                                     "j34": j34, "j34_std": j34_std, "j34_err": j34_std/np.sqrt(len(couplings[:,0])), \
                                     "c3": c3, "c2": c2, "non-c2-c3": not_c2_c3
                                 }
+
+
+
+        # =================
+        # TWO END STATE MODEL
+        # =================
+        #print("(TWO END STATE MODEL)")
+        #if PLOT_TITLE.upper().startswith("C") or PLOT_TITLE.upper().startswith("U"):
+        #    atom_indices = init_traj.topology.select("name H5 or name H6")   # H5 should be H1'
+        #    atom_indices = atom_indices.reshape(1,2)
+        #    d = mdtraj.compute_distances(traj, atom_indices) * UNIT_NM_TO_ANGSTROMS
+        #    d_anti = 3.48
+        #    d_syn = 2.12
+        #    a = d_syn**6 - d_anti**6
+        #    b = ((d_syn * d_anti)/d.mean())**6
+        #    anti = 100 * (1/a) * (b - d_anti**6)
+        #    syn = 100 - anti
+        #    print("anti: {:.2f}".format(anti))
+        #    print("syn: {:.2f}".format(syn))
+        #c3 = 100*(j34/(j12+j34))
+        #c2 = 100 - c3
+        #print("C3'-endo: {:.2f}".format(c3))
+        #print("C2'-endo: {:.2f}\n".format(c2))
 
     # save
     import pandas as pd
@@ -341,6 +333,7 @@ def run(PLOT_TITLE):
 @click.command()
 @click.option('--title', required=True, help='title name')
 def cli(**kwargs):
+    print(kwargs)
     PLOT_TITLE = kwargs["title"]
     plot_wheel(PLOT_TITLE)
     plot(PLOT_TITLE)

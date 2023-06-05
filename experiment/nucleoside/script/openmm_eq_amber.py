@@ -12,9 +12,7 @@ import openmmtools as mmtools
 from openmm.app import *
 from openmm import *
 from openmm.unit import *
-#from simtk.unit import Quantity
 from openff.toolkit.utils import utils as offutils
-#from openff.units.openmm import to_openmm
 from sys import stdout
 from openmm.app import PDBFile
 from pdbfixer import PDBFixer
@@ -138,7 +136,6 @@ def run(**options):
 
 
     # define reporter
-    #simulation.reporters.append(PDBReporter('/Users/takabak/Desktop/dump.pdb', options["netcdf_frequency"]))
     simulation.reporters.append(NetCDFReporter(os.path.join(output_prefix, 'traj.nc'), netcdf_frequency))
     simulation.reporters.append(CheckpointReporter(os.path.join(output_prefix, 'checkpoint.chk'), checkpoint_frequency))
     simulation.reporters.append(StateDataReporter(os.path.join(output_prefix, 'reporter.log'), logging_frequency, step=True, potentialEnergy=True, kineticEnergy=True, totalEnergy=True, temperature=True, volume=True, density=True, speed=True))

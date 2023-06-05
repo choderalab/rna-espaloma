@@ -65,20 +65,13 @@ def run(**options):
     initialize_velocity = options["initialize_velocity"]
     timestep = 4 * femtoseconds
     hmass = 3.5 * amu
-    #temperature = 275 * kelvin
     temperature = 300 * kelvin
     checkpoint_frequency = 250000  # 1ns
     logging_frequency = 25000  # 100ps
     netcdf_frequency = 25000  # 100ps
-    nsteps = 25000000  # 100ns
+    #nsteps = 25000000  # 100ns
     #nsteps = 50000000  # 200ns
-    
-    # test
-    #nsteps = 5000
-    #checkpoint_frequency = 10
-    #logging_frequency = 10
-    #netcdf_frequency = 10
-
+    nsteps = 250000000  # 1000ns
 
     platform = mmtools.utils.get_fastest_platform()
     platform_name = platform.getName()
@@ -110,7 +103,6 @@ def run(**options):
     state = XmlSerializer.deserialize(state_xml)
     simulation.context.setState(state)
 
-
     # Selet atoms to save
     atom_indices = []
     top = mdtraj.load_pdb(os.path.join(restart_prefix, 'state.pdb'))
@@ -119,9 +111,7 @@ def run(**options):
         for a in r.atoms:
             atom_indices.append(a.index)
 
-
     # Define reporter
-    #simulation.reporters.append(NetCDFReporter('traj.nc', netcdf_frequency))
     simulation.reporters.append(NetCDFReporter('traj.nc', netcdf_frequency, atomSubset=atom_indices))
     simulation.reporters.append(CheckpointReporter('checkpoint.chk', checkpoint_frequency))
     simulation.reporters.append(StateDataReporter('reporter.log', logging_frequency, step=True, potentialEnergy=True, kineticEnergy=True, totalEnergy=True, temperature=True, volume=True, density=True, speed=True))
@@ -129,7 +119,6 @@ def run(**options):
     if initialize_velocity == "True":
         simulation.context.setVelocitiesToTemperature(temperature)     # initialize velocity
     simulation.step(nsteps)
-
 
     """
     Export state in xml format

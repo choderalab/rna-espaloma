@@ -20,6 +20,14 @@ from openmmforcefields.generators import EspalomaTemplateGenerator, GAFFTemplate
 import logging
 logging.basicConfig(filename='logging.log', encoding='utf-8', level=logging.INFO)
 
+
+# Export version
+import openmmforcefields
+import openff.toolkit
+print(f"openmmforcefield: {openmmforcefields.__version__}")
+print(f"openff-toolkit: {openff.toolkit.__version__}")
+
+
 #
 # PAREMETERS and FORCE FIELD
 #
@@ -27,6 +35,8 @@ box_padding = 12.0 * angstrom
 salt_conc = 0.08 * molar
 nb_cutoff = 10 * angstrom
 hmass = 3.5 * amu #Might need to be tuned to 3.5 amu 
+temperature = 300 * kelvin
+timestep = 4 * femtoseconds
 
 
 def CreateAmberSystem(inputfile, _ff, water_model):
@@ -84,7 +94,7 @@ def CreateAmberSystem(inputfile, _ff, water_model):
     amber_simulation.context.setPositions(amber_model.positions)
 
     # minimize: fix hydrogen positions
-    amber_simulation.minimizeEnergy(maxIterations=20)
+    amber_simulation.minimizeEnergy(maxIterations=10)
     amber_minpositions = amber_simulation.context.getState(getPositions=True).getPositions()
     PDBFile.writeFile(amber_model.topology, amber_minpositions, open("min.pdb", 'w'))   
 
@@ -210,7 +220,7 @@ def update_topology(amber_model, amber_state, espaloma_model):
 
 
 
-def CreateEspalomaSystem(amber_model, amber_minpositions, amber_state, water_model):
+def CreateEspalomaSystem(amber_model, amber_minpositions, amber_state, water_model, net_model):
     """
     Update topology and use minimized amber posisitons for new positions. 
     This is to ensure that the RNA structures are properly read by `openff.topology.Molecule`.
@@ -243,10 +253,7 @@ def CreateEspalomaSystem(amber_model, amber_minpositions, amber_state, water_mod
     t.atom_slice(indices).save_pdb('rna_espaloma.pdb')
 
     mol = Molecule.from_file('rna_espaloma.pdb', file_format='pdb')
-    #generator = EspalomaTemplateGenerator(molecules=mol, forcefield='espaloma-0.2.2')
-    #generator = EspalomaTemplateGenerator(molecules=mol, forcefield='espaloma-0.2.2-local.pt')
-    #generator = EspalomaTemplateGenerator(molecules=mol, forcefield='net.pt')
-    generator = EspalomaTemplateGenerator(molecules=mol, forcefield='net.pt', reference_forcefield='openff_unconstrained-2.0.0', charge_method='nn')
+    generator = EspalomaTemplateGenerator(molecules=mol, forcefield=net_model, reference_forcefield='openff_unconstrained-2.0.0', charge_method='nn')
     #EspalomaTemplateGenerator.INSTALLED_FORCEFIELDS
 
     #ff = ForceField('amber/protein.ff14SB.xml', 'amber/tip3p_standard.xml', 'amber/tip3p_HFE_multivalent.xml')
@@ -284,18 +291,19 @@ def CreateEspalomaSystem(amber_model, amber_minpositions, amber_state, water_mod
                                                                                                                   atom.residue.id, \
                                                                                                                   atom.name, \
                                                                                                                   atom.id))
-    # minimize 
     topology = espaloma_model_mapped.getTopology()
     positions = espaloma_model_mapped.getPositions()
     PDBFile.writeFile(topology, positions, file=open('espaloma_mapped_solvated.pdb', 'w'))
 
-    integrator = LangevinIntegrator(300*kelvin, 1/picosecond, 0.002*picoseconds)
+    #integrator = LangevinIntegrator(300*kelvin, 1/picosecond, 0.002*picoseconds)
+    integrator = LangevinMiddleIntegrator(temperature, 1/picosecond, timestep)
     simulation = Simulation(espaloma_model_mapped.topology, system, integrator)
     simulation.context.setPositions(positions)
-    simulation.minimizeEnergy(maxIterations=100)
-    minpositions = simulation.context.getState(getPositions=True).getPositions()
-    PDBFile.writeFile(topology, minpositions, open("espaloma_mapped_min.pdb", 'w')) 
-
+    
+    # minimize 
+    #simulation.minimizeEnergy(maxIterations=100)
+    #minpositions = simulation.context.getState(getPositions=True).getPositions()
+    #PDBFile.writeFile(topology, minpositions, open("espaloma_mapped_min.pdb", 'w')) 
 
     # save
     state = simulation.context.getState(getPositions=True, getVelocities=True, getEnergy=True, getForces=True)
@@ -337,9 +345,11 @@ def CreateEspalomaSystem(amber_model, amber_minpositions, amber_state, water_mod
 @click.command()
 @click.option('--pdbfile', required=True, default='../../../crd/rna_noh.pdb', help='path to pdb used to load topology')
 @click.option('--water_model', type=click.Choice(['tip3p', 'tip3pfb', 'spce', 'opc3', 'tip4pew', 'tip4pfb', 'opc']), help='water model')
+@click.option('--net_model', required=True, help='path to espaloma model')
 def cli(**kwargs):
     inputfile = kwargs['pdbfile']
     water_model = kwargs['water_model']
+    net_model = kwargs['net_model']
 
     #
     # 3 point water model
@@ -378,7 +388,7 @@ def cli(**kwargs):
         raise NameError("undefined water model")
 
     amber_model, amber_minpositions, amber_state = CreateAmberSystem(inputfile, _ff, water_model)
-    espaloma_model, espaloma_model_mapped = CreateEspalomaSystem(amber_model, amber_minpositions, amber_state, water_model)
+    espaloma_model, espaloma_model_mapped = CreateEspalomaSystem(amber_model, amber_minpositions, amber_state, water_model, net_model)
 
     # compare models
     logging.info("")

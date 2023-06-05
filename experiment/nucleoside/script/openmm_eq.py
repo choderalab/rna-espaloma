@@ -13,9 +13,7 @@ import openmmtools as mmtools
 from openmm.app import *
 from openmm import *
 from openmm.unit import *
-#from simtk.unit import Quantity
 from openff.toolkit.utils import utils as offutils
-#from openff.units.openmm import to_openmm
 from sys import stdout
 from openmm.app import PDBFile
 from pdbfixer import PDBFixer
@@ -87,14 +85,6 @@ def run(**options):
     logging_frequency = 25000  # 100ps
     netcdf_frequency = 25000  # 100ps
 
-    # test
-    #nsteps_min = 100
-    #nsteps_eq = 100
-    #nsteps_prod = 5000
-    #checkpoint_frequency = 10
-    #logging_frequency = 10
-    #netcdf_frequency = 10
-    
     platform = mmtools.utils.get_fastest_platform()
     platform_name = platform.getName()
     print("fastest platform is ", platform_name)
@@ -127,18 +117,17 @@ def run(**options):
 
 
     # define reporter
-    #simulation.reporters.append(PDBReporter('/Users/takabak/Desktop/dump.pdb', options["netcdf_frequency"]))
     simulation.reporters.append(NetCDFReporter(os.path.join(output_prefix, 'traj.nc'), netcdf_frequency))
     simulation.reporters.append(CheckpointReporter(os.path.join(output_prefix, 'checkpoint.chk'), checkpoint_frequency))
     simulation.reporters.append(StateDataReporter(os.path.join(output_prefix, 'reporter.log'), logging_frequency, step=True, potentialEnergy=True, kineticEnergy=True, totalEnergy=True, temperature=True, volume=True, density=True, speed=True))
 
-    # minimization (skip)
+    # minimization
     restraint_atom_indices = [ a.index for a in pdb.topology.atoms() if a.residue.name in ['A', 'C', 'U', 'T'] and a.element.symbol != 'H' ]
     restraint_index = system.addForce(create_position_restraint(pdb.positions, restraint_atom_indices))
 
-    #simulation.minimizeEnergy(maxIterations=nsteps_min)
-    #minpositions = simulation.context.getState(getPositions=True).getPositions()    
-    #PDBFile.writeFile(pdb.topology, minpositions, open(os.path.join(output_prefix, 'min.pdb'), 'w'))   
+    simulation.minimizeEnergy(maxIterations=nsteps_min)
+    minpositions = simulation.context.getState(getPositions=True).getPositions()    
+    PDBFile.writeFile(pdb.topology, minpositions, open(os.path.join(output_prefix, 'min.pdb'), 'w'))   
 
 
     # Equilibration

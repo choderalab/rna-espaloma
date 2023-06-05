@@ -12,9 +12,7 @@ import openmmtools as mmtools
 from openmm.app import *
 from openmm import *
 from openmm.unit import *
-#from simtk.unit import Quantity
 from openff.toolkit.utils import utils as offutils
-#from openff.units.openmm import to_openmm
 from sys import stdout
 from openmm.app import PDBFile
 from pdbfixer import PDBFixer
@@ -78,7 +76,7 @@ def run(**options):
     temperature = 275 * kelvin
     pressure = 1 * atmosphere
     nsteps_min = 100
-    nsteps_eq = 125000   # 50ps
+    nsteps_eq = 125000   # 500ps
     nsteps_prod = 2500000  # 10ns
     checkpoint_frequency = 250000  # 1ns
     logging_frequency = 25000  # 100ps
@@ -128,7 +126,6 @@ def run(**options):
 
     # Define reporter
     simulation.reporters.append(NetCDFReporter(os.path.join(output_prefix, 'traj.nc'), netcdf_frequency, atomSubset=atom_indices))
-    #simulation.reporters.append(NetCDFReporter(os.path.join(output_prefix, 'traj.nc'), netcdf_frequency))
     simulation.reporters.append(CheckpointReporter(os.path.join(output_prefix, 'checkpoint.chk'), checkpoint_frequency))
     simulation.reporters.append(StateDataReporter(os.path.join(output_prefix, 'reporter.log'), logging_frequency, step=True, potentialEnergy=True, kineticEnergy=True, totalEnergy=True, temperature=True, volume=True, density=True, speed=True))
 

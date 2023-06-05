@@ -1,15 +1,12 @@
 #!/usr/bin/env python
-# coding: utf-8
-
 """
 Reweight RNA tetramer conformer population with PyMBAR
-=======================================
+======================================================
 
 `pymbar.timeseries.detectEqulibration` gives slightly different t0, g, and Neff_max than `openmmtools`.
 This is expceted because in openmmtools `mmtools.multistate.MultiStateSamplerAnalyzer()._get_equilibraiton_data` uses a modified pass-through of `pymbar.timeseries.detectEquilibration`.
 More details can be found by running `mmtools.multistate.utils.get_equilibration_data_per_sample?`
 """
-
 import os, sys, math
 import numpy as np
 import click
@@ -91,12 +88,9 @@ def radian_to_degree(a):
     a : list or np.ndarray
         angles in degrees of shape [n_frames, n_residues, n_torsions]
     """
-
     a[np.where(a<0.0)] += 2.*np.pi
     a *= 180.0/np.pi
-    #a = a*(180./np.pi)
-    #a[np.where(a<0.0)] += 360
-    
+
     return a
 
 
@@ -116,7 +110,6 @@ def plot(x, y, yerr, plot_title, output_prefix):
     Returns
     -------
     """
-    
     fig, ax = plt.subplots(figsize=(16, 8))
     ax.set_ylabel('(%)')
     ax.yaxis.set_label_position("left")
@@ -126,8 +119,6 @@ def plot(x, y, yerr, plot_title, output_prefix):
 
     for i, _y in enumerate(y):
         ax.text(x=i-0.2, y=_y+3, s=f'{_y:.1f}', size=24)
-
-    #ax.bar(myclass_mbar.keys(), population, width=1.0, color=mycolor_dict.values())
     if yerr != None:
         ax.bar(x, y, width=1.0, color=mycolor_dict.values())
     else:
@@ -147,17 +138,17 @@ def extract_data(replica_index, bb_angles, pucker_angles, stackings):
     ----------
     replica_index : int
         Replica index number
-    bb_angles : np.ndarray of shape [n_replicas, n_iterations, n_residues, n_angles]
+    bb_angles : np.ndarray of shape [n_replicas, n_frames, n_residues, n_angles]
         Backbone angles in degrees
-    pucker_angles : np.ndarray of shape [n_replicas, n_iterations, n_residues, n_angles]
+    pucker_angles : np.ndarray of shape [n_replicas, n_frames, n_residues, n_angles]
         Pucker angles in degrees
-    stackings : np.ndarray of shape [n_replicas, n_iterations, stacking_info]
+    stackings : np.ndarray of shape [n_replicas, n_frames, stacking_info]
         Stacking_info stores stacking residue index and stacking pattern (e.g. [[[0, 1], [1, 2], [2, 3]], ['>>', '>>', '>>']])
 
     Returns
     -------
     """
-    alpha = bb_angles[replica_index,:,:,0]  # [n_iterations, n_residues]
+    alpha = bb_angles[replica_index,:,:,0]  # [n_frames, n_residues]
     beta = bb_angles[replica_index,:,:,1]
     gamma = bb_angles[replica_index,:,:,2]
     delta = bb_angles[replica_index,:,:,3]
@@ -166,7 +157,7 @@ def extract_data(replica_index, bb_angles, pucker_angles, stackings):
     chi = bb_angles[replica_index,:,:,6]
     phase = pucker_angles[replica_index,:,:,0]
     stacking = stackings[replica_index,:,:]
-    
+
     return alpha, beta, gamma, delta, eps, zeta, chi, phase, stacking
 
 
@@ -179,15 +170,9 @@ def _check_endo(angle_d, angle_p):
     """
     Define C3'-endo and C2'-endo.
 
-    δ torsion angles is used to defined the endo states described in:
-    RNA backbone: Consensus all-angle conformers and modular string nomenclature (an RNA Ontology Consortium contribution), RNA 2008, doi: 10.1261/rna.657708
-
-    C3'-endo:
-        an individual ribose with δ between 55° and 110°
-    C2'-endo:
-        an individual ribose with δ between 120° and 175°
-        
-    Alternatively C3'- and C2'- endo can be defined using the pucker phase angle. C3'-endo [0°, 36°) as in canonical RNA and A-form DNA, and the C2'-endo [144°, 180°).
+    An individual ribose with δ torsion between 55° and 110° is defined C3'-endo, and δ between 120° and 175° is defined C2'-endo.
+    (RNA backbone: Consensus all-angle conformers and modular string nomenclature (an RNA Ontology Consortium contribution), RNA 2008, doi: 10.1261/rna.657708)
+    Alternatively C3'- and C2'- endo is also defined using the pucker phase angle. C3'-endo [0°, 36°) as in canonical RNA and A-form DNA, and the C2'-endo [144°, 180°).
 
     Returns
     -------
@@ -197,7 +182,6 @@ def _check_endo(angle_d, angle_p):
     c2_endo : list
         '1' if if δ torsion angle forms a C2'-endo form, else '0'
     """
-
     c3_endo = []
     for _delta, _phase in zip(angle_d, angle_p):
         # C3 endo
@@ -225,55 +209,52 @@ def _intercalete(stacking_residue_index):
     
     Parameters
     ----------
-
     stacking_residue_index : list
         List of stacking residue index (e.g. [[0, 1], [1, 2]]).
 
     Returns
     -------
-
     name : str
         Category name
     """
-    
     name = ""
-    
+
     # 1-'0'-2-3
     # 2-'0'-1-3
     if [[0, 1], [0, 2]] == stacking_residue_index:
         name = "I0102"
-            
+    
     # 1-'2'-0-3
     # 0-'2'-1-3
     if [[0, 2], [1, 2]] == stacking_residue_index:
         name = "I0212"
-
+    
     # 1-2-'0'-3
     if [[0, 2], [0, 3]] == stacking_residue_index:
         name = "I0203"
-
+    
     # 0-'3'-1-2
     if [[0, 3], [1, 3]] == stacking_residue_index:
         name = "I0313"
-            
+    
     # 0-2-'1'-3
     # 0-3-'1'-2
     if [[1, 2], [1, 3]] == stacking_residue_index:
         name = "I1213"
-        
+    
     # 0-2-'3'-1
     # 0-1-'3'-2
     if [[1, 3], [2, 3]] == stacking_residue_index:
         name = "I1323"
-        
+    
     # 1-'2'-'0'-3
     if [[0, 2], [0, 3], [1, 2]] == stacking_residue_index:
         name = "I020312"        
-
+    
     # 0-'2'-'1'-3
     if [[0, 2], [1, 2], [1, 3]] == stacking_residue_index:
         name = "I021213"
-
+    
     # 0-'3'-'1'-2
     if [[0, 3], [1, 2], [1, 3]] == stacking_residue_index:
         name = "I031213"
@@ -290,23 +271,20 @@ def _tangled(stacking_residue_index):
     
     Parameters
     ----------
-
     stacking_residue_index : list
         List of stacking residue index (e.g. [[0, 1], [1, 2]]).
 
     Returns
     -------
-
     name : str
         Category name
     """
-    
     name = ""        
-
+    
     # 1-2-'3'-0
     #if [[0, 3], [1, 2]] == stacking_residue_index:
     #    name = "T0312"
-
+    
     #if [[0, 3], [2, 3]] == stacking_residue_index:
     #    name = "T0323"
     
@@ -345,28 +323,26 @@ def annotate(replica_index, alpha, beta, gamma, delta, eps, zeta, chi, phase, st
     replica_index : int
         Replica index number.
     alpha : np.ndarray
-        Backbone alpha angles in degrees of shape [n_iterations, n_residues, n_angles].
+        Backbone alpha angles in degrees of shape [n_frames, n_residues, n_angles].
     beta : np.ndarray
-        Backbone beta angles in degrees of shape [n_iterations, n_residues, n_angles].
+        Backbone beta angles in degrees of shape [n_frames, n_residues, n_angles].
     gamma : np.ndarray
-        Backbone gamma angles in degrees of shape [n_iterations, n_residues, n_angles].
+        Backbone gamma angles in degrees of shape [n_frames, n_residues, n_angles].
     delta : np.ndarray
-        Backbone delta angles in degrees of shape [n_iterations, n_residues, n_angles].
+        Backbone delta angles in degrees of shape [n_frames, n_residues, n_angles].
     eps : np.ndarray
-        Backbone epsilon angles in degrees of shape [n_iterations, n_residues, n_angles].
+        Backbone epsilon angles in degrees of shape [n_frames, n_residues, n_angles].
     zeta : np.ndarray
-        Backbone zeta angles in degrees of shape [n_iterations, n_residues, n_angles].
+        Backbone zeta angles in degrees of shape [n_frames, n_residues, n_angles].
     chi : np.ndarray
-        Nucleobase chi angles in degrees of shape [n_iterations, n_residues, n_angles].
+        Nucleobase chi angles in degrees of shape [n_frames, n_residues, n_angles].
     phase : np.ndarray
-        Sugar pucker angles in degrees of shape of shape [n_iterations, n_residues, n_angles].
+        Sugar pucker angles in degrees of shape of shape [n_frames, n_residues, n_angles].
     stacking : np.ndarray
-        Stacking information shape of [n_iterations, stacking_pattern]. Stacking_pattern contains stacking residue index and stacking form (e.g. [[[0, 1], [1, 2], [2, 3]], ['>>', '>>', '>>']]).
+        Stacking information shape of [n_frames, stacking_pattern]. Stacking_pattern contains stacking residue index and stacking form (e.g. [[[0, 1], [1, 2], [2, 3]], ['>>', '>>', '>>']]).
 
-    Return
-    ----------
-    xxxx
-    
+    Returns
+    -------
     """    
     obs_dict = defaultdict(list)
     unknown_category = defaultdict(list)
@@ -428,7 +404,9 @@ def annotate(replica_index, alpha, beta, gamma, delta, eps, zeta, chi, phase, st
 
 def run(kwargs):
     """
-    Reweight conformational populations using PyMBAR. Each REPX simulation are analyzed consecutively and effective energies are used to decorrelate the samples.
+    Reweight conformational populations using PyMBAR.
+    
+    Each REPX simulation are analyzed consecutively and effective energies are used to decorrelate the samples.
     All conformations are annotated as AMa, AMi, I, F1, F4, or O and its populations will be reweighted using mbar weights.
 
     Parameters
@@ -440,6 +418,9 @@ def run(kwargs):
     ncfile = kwargs["ncfile"]
     output_prefix = kwargs["output_prefix"]
     plot_title = kwargs["plot_title"]
+    start_frame = kwargs['start_frame']
+    end_frame = kwargs['end_frame']
+    skip_frame = kwargs['skip_frame']
 
 
     if not os.path.exists(output_prefix) and output_prefix != ".":
@@ -459,10 +440,10 @@ def run(kwargs):
 
     # npz 
     npzfile = np.load(npzfile, allow_pickle=True)
-    bb_angles = radian_to_degree(npzfile["bb_angles"])         # [n_replicas, n_iterations, n_residues, n_angles]
-    pucker_angles = radian_to_degree(npzfile["pucker_angles"]) # [n_replicas, n_iterations, n_residues, n_angles]
-    stackings = npzfile["stackings"]                           # [n_replicas, n_iterations, stacking_info]
-    _, _, n_residues, n_angles = bb_angles.shape               # [n_replicas, n_iterations, n_residues, n_jcouplings]
+    bb_angles = radian_to_degree(npzfile["bb_angles"])         # [n_replicas, n_frames, n_residues, n_angles]
+    pucker_angles = radian_to_degree(npzfile["pucker_angles"]) # [n_replicas, n_frames, n_residues, n_angles]
+    stackings = npzfile["stackings"]                           # [n_replicas, n_frames, stacking_info]
+    _, _, n_residues, n_angles = bb_angles.shape               # [n_replicas, n_frames, n_residues, n_jcouplings]
     print("found {} observables for {} residues".format(n_angles, n_residues))
     
     # trajectory
@@ -474,20 +455,16 @@ def run(kwargs):
     # Annotate structures
     # -----
     print(">annotate structures")
-
     myclasses_by_number = []
     for replica_index in range(analyzer.n_replicas):
         alpha, beta, gamma, delta, eps, zeta, chi, phase, stacking = extract_data(replica_index, bb_angles, pucker_angles, stackings)
-        
         # myclass: list of annotated category by names.
         # myclass_by_number: list of annotated category by integers.
         # obs_dict: defaultdict that stores all categories. Cateogry names are used as keys and stores lists of 1 (True) or 0 (False) if the structure is annotated to that category class.
         # unknown_category: defaultdict that was assigned to any of the given categories.
         myclass, myclass_by_number, obs_dict, unknown_cateorgy = annotate(replica_index, alpha, beta, gamma, delta, eps, zeta, chi, phase, stacking)
-
         # Store category numbers for each replica
         myclasses_by_number.append(myclass_by_number) 
-
         # Count each class (annotation category)
         from collections import Counter
         d = Counter(myclass)
@@ -499,18 +476,10 @@ def run(kwargs):
             "F4":  d["F4"], \
             "O":   d["O"]
         }
-        
         print("replica {}:\t{}".format(replica_index, mydata))
 
-    # Check shape
-    myclasses_by_number = np.array(myclasses_by_number)
-    assert analyzer.n_replicas == myclasses_by_number.shape[0]
-
-    # Reformat array for decorrelation detection
-    k, n = myclasses_by_number.shape
-    o_kn = np.zeros([k, n+1])  # add iteration to match the shape size with energy matrix
-    o_kn[:,1:] = myclasses_by_number
-
+    # Observable [n_replicas, n_frames]
+    o_kn = np.array(myclasses_by_number)
 
     # -----
     # Compute decorrelated energies and observables
@@ -519,9 +488,20 @@ def run(kwargs):
     print(">compute decorrelated energies and observables")
 
     # Energy_data is [energy_sampled, energy_unsampled, neighborhood, replicas_state_indices]
-    energy_data = list(analyzer.read_energies())
+    energy_data_tmp = list(analyzer.read_energies())
     # Generate the equilibration data
-    sampled_energy_matrix, unsampled_energy_matrix, neighborhoods, replicas_state_indices = energy_data
+    sampled_energy_matrix, unsampled_energy_matrix, neighborhoods, replicas_state_indices = energy_data_tmp
+    # Slice array
+    if end_frame < 0:
+        end_frame = sampled_energy_matrix.shape[-1] + end_frame + 1
+    sampled_energy_matrix = sampled_energy_matrix[:,:,start_frame:end_frame:skip_frame]
+    unsampled_energy_matrix = unsampled_energy_matrix[:,:,start_frame:end_frame:skip_frame]
+    neighborhoods = neighborhoods[:,:,start_frame:end_frame:skip_frame]
+    replicas_state_indices = replicas_state_indices[:,start_frame:end_frame:skip_frame]
+    # Update energy_data
+    energy_data = [sampled_energy_matrix, unsampled_energy_matrix, neighborhoods, replicas_state_indices]
+    # Check array shape
+    assert o_kn.shape == replicas_state_indices.shape
     # Note: This is different from pymbar.timeseries.detectEquilibration. analyzer._get_equilibration_data uses max_subset and excludes first iteration (minimization) to detect the equilibration data.
     number_equilibrated, g_t, Neff_max = analyzer._get_equilibration_data(sampled_energy_matrix, neighborhoods, replicas_state_indices)
 
@@ -534,10 +514,10 @@ def run(kwargs):
     sampled_energy_matrix, unsampled_energy_matrix, neighborhood, replicas_state_indices = energy_data
 
     # Initialize the MBAR matrices in ln [n_state, n_replica * n_iteration] form.
-    n_replicas, n_sampled_states, n_iterations = sampled_energy_matrix.shape
+    n_replicas, n_sampled_states, n_frames = sampled_energy_matrix.shape
     _, n_unsampled_states, _ = unsampled_energy_matrix.shape
     n_total_states = n_sampled_states + n_unsampled_states
-    energy_matrix = np.zeros([n_total_states, n_iterations*n_replicas])
+    energy_matrix = np.zeros([n_total_states, n_frames*n_replicas])
     samples_per_state = np.zeros([n_total_states], dtype=int)
 
     # Compute shift index for how many unsampled states there were.
@@ -603,6 +583,9 @@ def run(kwargs):
 @click.option("--ncfile",  required=True, default="../enhanced.nc", type=str, help="filename of repx trajectory in relative path")
 @click.option("--plot_title",    default="",  type=str, help="plot title")
 @click.option("--output_prefix", default=".", type=str, help="output prefix to save output files")
+@click.option("--start_frame", default=0, help="Index of the first frame to include in the trajectory. Index 0 corresponds to the minimization step.")
+@click.option("--end_frame", default=-1, help="Index of the last frame to include in the trajectory")
+@click.option("--skip_frame", default=1, help="Extract every n frames from the trajectory")
 def cli(**kwargs):
     run(kwargs)
 

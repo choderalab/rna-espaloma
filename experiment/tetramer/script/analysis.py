@@ -136,7 +136,7 @@ def calc_sugar_pucker(init_pdb, traj, rnames):
 
 
 
-def calc_rmsd(init_pdb, traj, rnames):
+def calc_rmsd(init_traj, traj, rnames):
     """
     RMSD and eRMSD
     ---------
@@ -148,7 +148,7 @@ def calc_rmsd(init_pdb, traj, rnames):
     #
     # RMSD time plot
     #
-    init_traj = mdtraj.load(init_pdb)
+    #init_traj = mdtraj.load(init_pdb)    
     rmsd = list(bb.functions.rmsd_traj(init_traj, traj))   
     rmsd = np.array(rmsd) * UNIT_NM_TO_ANGSTROMS
     
@@ -238,15 +238,17 @@ if __name__ == '__main__':
 
     # initial structure
     init_pdb = "{}/espaloma_mapped_solvated.pdb".format(input_prefix)
-    #init_pdb = "../../prep/espaloma_mapped_solvated.pdb"
+    _init_traj = mdtraj.load(init_pdb)
+    # slice
+    atom_indices = _init_traj.topology.select('not (protein or water or symbol Na or symbol Cl)')
+    init_traj = _init_traj.atom_slice(atom_indices)
 
     # equilibrated
     ncfile = "../traj.nc"
-    traj = mdtraj.load(ncfile, top=init_pdb)
-
+    traj = mdtraj.load(ncfile, top=init_traj.topology)
     rnames = [ residue.name for residue in traj.topology.residues if residue.name not in ["HOH", "NA", "CL"] ]
 
     # calculate and plot
     calc_sugar_pucker(init_pdb, traj, rnames)
-    calc_rmsd(init_pdb, traj, rnames)
+    calc_rmsd(init_traj, traj, rnames)
 

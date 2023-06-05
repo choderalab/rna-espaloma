@@ -27,11 +27,6 @@ warnings.filterwarnings("ignore")
 UNIT_NM_TO_ANGSTROMS = 10
 UNIT_PS_TO_NS = 1/1000
 CHECKPOINT_INTERVAL = 1
-START_FRAME = 1
-END_FRAME = -1
-SKIP_FRAME = 1
-
-
 
 
 # ==============================================================================
@@ -167,7 +162,7 @@ def extract_trajectory(reference, nc_path, nc_checkpoint_file=None, checkpoint_i
     # Export trajectory (overwrite exisiting file)
     #trajectory.save_netcdf('md.nc')
     #trajectory[-1].save_amberrst7('md.rst7')
-    trajectory[-1].save_pdb('md{}.pdb'.format(replica_index))   # overwrite exisiting file
+    trajectory[-1].save_pdb('./pdb/replica{}_nowat.pdb'.format(replica_index))
 
     return trajectory
 
@@ -177,6 +172,9 @@ def run(kwargs):
     input_prefix = kwargs['input_prefix']
     ref_prefix = kwargs['ref_prefix']
     keep_solvent = kwargs['keep_solvent']
+    start_frame = kwargs['start_frame']
+    end_frame = kwargs['end_frame']
+    skip_frame = kwargs['skip_frame']
 
 
     """
@@ -215,7 +213,7 @@ def run(kwargs):
     
         # Extract trajectory by replicas
         # Returns either trajectory with full atoms or only specified atoms
-        t = extract_trajectory(reference=ref_pdb, nc_path=ncfile, start_frame=START_FRAME, end_frame=END_FRAME, skip_frame=SKIP_FRAME, replica_index=index, keep_solvent=keep_solvent)
+        t = extract_trajectory(reference=ref_pdb, nc_path=ncfile, start_frame=start_frame, end_frame=end_frame, skip_frame=skip_frame, replica_index=index, keep_solvent=keep_solvent)
         
         # Get atom indices to analyze. Alternatively, reporter.analysis_particle_indices could be used but if available but not might be same indices.
         # You're interest of atoms might change when you first ran the simulation and when you want to analyze it.
@@ -265,15 +263,21 @@ def run(kwargs):
     assert bb_angles.shape[0] == pucker_angles.shape[0] == rg.shape[0] == rmsd.shape[0] == ermsd.shape[0] == stackings.shape[0], \
     print(bb_angles.shape, pucker_angles.shape, rg.shape, rmsd.shape, ermsd.shape, stackings.shape)
 
+    # Debug
+    print(bb_angles.shape, pucker_angles.shape, rg.shape, rmsd.shape, ermsd.shape, stackings.shape)
+
     # Save
     np.savez("mydata.npz", bb_angles=bb_angles, pucker_angles=pucker_angles, rg=rg, rmsd=rmsd, ermsd=ermsd, stackings=stackings, couplings=couplings)
 
 
 
 @click.command()
-@click.option("--input_prefix", required=True, help="path to input file")
-@click.option("--ref_prefix", required=True, help="path to reference files")
-@click.option("--keep_solvent", default=True, help="keep solvent during analysis")
+@click.option("--input_prefix", required=True, help="Path to input file")
+@click.option("--ref_prefix", required=True, help="Path to reference files")
+@click.option("--keep_solvent", default=True, help="Keep solvent during analysis")
+@click.option("--start_frame", default=0, help="Index of the first frame to include in the trajectory. Index 0 corresponds to the minimization step.")
+@click.option("--end_frame", default=-1, help="Index of the last frame to include in the trajectory")
+@click.option("--skip_frame", default=1, help="Extract every n frames from the trajectory")
 def cli(**kwargs):
     #print(kwargs)
     run(kwargs)

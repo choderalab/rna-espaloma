@@ -27,6 +27,8 @@ box_padding = 12.0 * angstrom
 salt_conc = 0.15 * molar
 nb_cutoff = 10 * angstrom
 hmass = 3.5 * amu #Might need to be tuned to 3.5 amu 
+temperature = 275 * kelvin
+timestep = 4 * femtoseconds
 
 
 def CreateAmberSystem(inputfile, _ff, water_model):
@@ -79,12 +81,13 @@ def CreateAmberSystem(inputfile, _ff, water_model):
             pass
     amber_system.addForce(force)
 
-    integrator = LangevinMiddleIntegrator(300*kelvin, 1/picosecond, 0.002*picoseconds)
+    #integrator = LangevinIntegrator(300*kelvin, 1/picosecond, 0.002*picoseconds)
+    integrator = LangevinMiddleIntegrator(temperature, 1/picosecond, timestep)
     amber_simulation = Simulation(amber_model.topology, amber_system, integrator)
     amber_simulation.context.setPositions(amber_model.positions)
 
     # minimize: fix hydrogen positions
-    amber_simulation.minimizeEnergy(maxIterations=20)
+    amber_simulation.minimizeEnergy(maxIterations=10)
     amber_minpositions = amber_simulation.context.getState(getPositions=True).getPositions()
     PDBFile.writeFile(amber_model.topology, amber_minpositions, open("min.pdb", 'w'))   
 
@@ -243,9 +246,6 @@ def CreateEspalomaSystem(amber_model, amber_minpositions, amber_state, _ff):
     t.atom_slice(indices).save_pdb('rna_espaloma.pdb')
 
     mol = Molecule.from_file('rna_espaloma.pdb', file_format='pdb')
-    #generator = EspalomaTemplateGenerator(molecules=mol, forcefield='espaloma-0.2.2')
-    #generator = EspalomaTemplateGenerator(molecules=mol, forcefield='espaloma-0.2.2-local.pt')
-    #generator = EspalomaTemplateGenerator(molecules=mol, forcefield='net.pt')
     generator = EspalomaTemplateGenerator(molecules=mol, forcefield='net.pt', reference_forcefield='openff_unconstrained-2.0.0', charge_method='nn')
     #EspalomaTemplateGenerator.INSTALLED_FORCEFIELDS
 
@@ -268,18 +268,19 @@ def CreateEspalomaSystem(amber_model, amber_minpositions, amber_state, _ff):
                                                                                                                   atom.residue.id, \
                                                                                                                   atom.name, \
                                                                                                                   atom.id))
-    # minimize 
     topology = espaloma_model_mapped.getTopology()
     positions = espaloma_model_mapped.getPositions()
     PDBFile.writeFile(topology, positions, file=open('espaloma_mapped_solvated.pdb', 'w'))
 
-    integrator = LangevinIntegrator(300*kelvin, 1/picosecond, 0.002*picoseconds)
+    #integrator = LangevinIntegrator(300*kelvin, 1/picosecond, 0.002*picoseconds)
+    integrator = LangevinMiddleIntegrator(temperature, 1/picosecond, timestep)
     simulation = Simulation(espaloma_model_mapped.topology, system, integrator)
     simulation.context.setPositions(positions)
-    simulation.minimizeEnergy(maxIterations=100)
-    minpositions = simulation.context.getState(getPositions=True).getPositions()
-    PDBFile.writeFile(topology, minpositions, open("espaloma_mapped_min.pdb", 'w')) 
-
+    
+    # minimize 
+    #simulation.minimizeEnergy(maxIterations=100)
+    #minpositions = simulation.context.getState(getPositions=True).getPositions()
+    #PDBFile.writeFile(topology, minpositions, open("espaloma_mapped_min.pdb", 'w')) 
 
     # save
     state = simulation.context.getState(getPositions=True, getVelocities=True, getEnergy=True, getForces=True)

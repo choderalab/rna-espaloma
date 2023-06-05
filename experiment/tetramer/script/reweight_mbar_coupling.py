@@ -1,15 +1,12 @@
 #!/usr/bin/env python
-# coding: utf-8
-
 """
 Reweight RNA tetramer j3-coupling with PyMBAR
-=======================================
+=============================================
 
 `pymbar.timeseries.detectEqulibration` gives slightly different t0, g, and Neff_max than `openmmtools`.
 This is expceted because in openmmtools `mmtools.multistate.MultiStateSamplerAnalyzer()._get_equilibraiton_data` uses a modified pass-through of `pymbar.timeseries.detectEquilibration`.
 More details can be found by running `mmtools.multistate.utils.get_equilibration_data_per_sample?`
 """
-
 import os, sys, math
 import numpy as np
 import click
@@ -208,7 +205,6 @@ def plot(result_dict_per_residue, output_prefix, benchmark_path, seq):
     plt.savefig("{}/coupling.png".format(output_prefix))
     plt.close()
     
-    # Dataframe to pickles
     df.to_pickle("{}/coupling.pkl".format(output_prefix))
 
 
@@ -216,19 +212,19 @@ def plot(result_dict_per_residue, output_prefix, benchmark_path, seq):
 def get_effective_observable_timeseries(u_kn):
     """
     """
-    n_replicas, n_iterations = u_kn.shape
-    u_n = np.zeros([n_iterations], np.float64)
+    n_replicas, n_frames = u_kn.shape
+    u_n = np.zeros([n_frames], np.float64)
     
     # Slice of all replicas, have to use this as : is too greedy
     replicas_slice = range(n_replicas)
-    for iteration in range(n_iterations):
+    for iteration in range(n_frames):
         # Slice the current sampled states by those replicas.
         u_n[iteration] = np.sum(u_kn[replicas_slice, iteration])
 
     return u_n
 
 
-# Not a good way to pass analyzer
+# Not a good way to pass analyzer?
 def _get_equilibration_data_custom(u_kn, analyzer):
     """
     """
@@ -275,6 +271,9 @@ def run(kwargs):
     seq = kwargs["seq"]
     benchmark_path = kwargs["benchmark_path"]
     output_prefix = kwargs["output_prefix"]
+    start_frame = kwargs['start_frame']
+    end_frame = kwargs['end_frame']
+    skip_frame = kwargs['skip_frame']
 
     if not os.path.exists(output_prefix) and output_prefix != ".":
         os.mkdir(output_prefix)
@@ -288,15 +287,15 @@ def run(kwargs):
     print(">residue names: {}".format(resnames))
     
 
-    # ----
+    #
     # Load data
-    # ----
+    #
     print(">load data")
 
     # npz 
     npzfile = np.load(npzfile, allow_pickle=True)
     couplings = npzfile['couplings']
-    _, _, n_residues, n_couplings = couplings.shape  # [n_replicas, n_iterations, n_residues, n_jcouplings]
+    _, _, n_residues, n_couplings = couplings.shape  # [n_replicas, n_frames, n_residues, n_jcouplings]
     print(">observable shape is {}".format(couplings.shape))
     print(">found {} observables for {} residues".format(n_couplings, n_residues))
     
@@ -307,30 +306,23 @@ def run(kwargs):
     print(">found {} iterations, {} replicas, and {} states".format(n_iterations, n_replicas, n_states))
 
 
-    # -----
-    # Reformat observable for decorrelated analysis
-    # -----
+    #
+    # Preprocess observable data to perform decorrelation analysis
+    #
     print(">reformat observable")
     dict_per_residue = {}  # key: residue name
     for residue_index in range(n_residues):
         dict_per_coupling = {}  # key: jcoupling name
         for coupling_index in range(n_couplings):
             resname = resnames[residue_index]
-            _o_kn = couplings[:,:,residue_index,coupling_index]  # [ n_replicas, n_iterations, n_residues, n_observables ]
-            k, n = _o_kn.shape
-            o_kn = np.zeros([k, n+1])  # add iteration to match the energy matrix shape
-            o_kn[:,1:] = _o_kn
-            # store
+            o_kn = couplings[:,:,residue_index,coupling_index]  # [n_replicas, n_frames, n_residues, n_observables]
             dict_per_coupling[dict_coupling_mapping_by_index[coupling_index]] = o_kn
-        # store
         dict_per_residue[resnames[residue_index]] = dict_per_coupling
 
 
-    # -----
-    # Detect equilibration
-    # -----
-
-    # Detect equilibration for each coupling per residue
+    #
+    # Compute equilibration iteration and statistical inefficiency (decorrelated iteration steps) for each J-couplings for every residue
+    #
     print(">detect equilibration")
     dict_equilibration_data = {}
     for residue_key in dict_per_residue.keys():    
@@ -345,34 +337,47 @@ def run(kwargs):
         dict_equilibration_data[residue_key] = tmp_dict
 
 
-    # -----
-    # Compute decorrelated energies and observables
-    # -----
-    print(">compute decorrelated energies and observables")
-    # Energy_data is [energy_sampled, energy_unsampled, neighborhood, replicas_state_indices]
-    energy_data = list(analyzer.read_energies())
+    #
+    # Load energy data from analyzer.read_energies() 
+    #
+    energy_data_tmp = list(analyzer.read_energies())
     # Generate the equilibration data
-    sampled_energy_matrix, unsampled_energy_matrix, neighborhoods, replicas_state_indices = energy_data
+    sampled_energy_matrix, unsampled_energy_matrix, neighborhoods, replicas_state_indices = energy_data_tmp
+    # Slice array
+    if end_frame < 0:
+        end_frame = sampled_energy_matrix.shape[-1] + end_frame + 1
+    sampled_energy_matrix = sampled_energy_matrix[:,:,start_frame:end_frame:skip_frame]
+    unsampled_energy_matrix = unsampled_energy_matrix[:,:,start_frame:end_frame:skip_frame]
+    neighborhoods = neighborhoods[:,:,start_frame:end_frame:skip_frame]
+    replicas_state_indices = replicas_state_indices[:,start_frame:end_frame:skip_frame]
+    # Update energy_data
+    energy_data = [sampled_energy_matrix, unsampled_energy_matrix, neighborhoods, replicas_state_indices]
+    # Check array shape
+    assert o_kn.shape == replicas_state_indices.shape
 
+
+    #
+    # Compute decorrelated energies and observables
+    #
+    print(">compute decorrelated energies and observables")
     dict_decoupled_data = {}  # key: residue name
     for residue_key in dict_equilibration_data.keys():
         tmp_dict = {} # key: coupling name
         for coupling_key in dict_equilibration_data[residue_key]:
+            # Get equilibrated iterations to discard and statistical inefficiency (decorrelated iteration steps)
             number_equilibrated, g_t, Neff_max = dict_equilibration_data[residue_key][coupling_key]
             logger.debug(">residue: {} ({}) number_equilibrated: {}, g_t: {}, Neff_max: {}".format(residue_key, coupling_key, number_equilibrated, g_t, Neff_max))
             
             if np.isnan(g_t) or np.isnan(Neff_max):
-                # Some couplings could be none for C5'- and C3'- nucleotide residues
+                # Some couplings could be None for C5'- and C3'- nucleotides
                 pass
             else:
 
-                """
-                Energy
-                """
-                # Remove equilibrated and decorrelated data from energy_data
+                #
+                # Energy
+                #
                 import copy
                 _energy_data = copy.deepcopy(energy_data)
-                
                 for i, energies in enumerate(_energy_data):
                     # Discard equilibration iterations.
                     energies = mmtools.multistate.utils.remove_unequilibrated_data(energies, number_equilibrated, -1)
@@ -381,14 +386,14 @@ def run(kwargs):
                 sampled_energy_matrix, unsampled_energy_matrix, neighborhood, replicas_state_indices = _energy_data
 
                 # Initialize the MBAR matrices in ln form.
-                n_replicas, n_sampled_states, n_iterations = sampled_energy_matrix.shape
+                n_replicas, n_sampled_states, n_frames = sampled_energy_matrix.shape
                 _, n_unsampled_states, _ = unsampled_energy_matrix.shape
 
                 # We assume there are no unsampled states. Altough below is redundant, we will follow similar procedures found in 
                 # openmmtools.multistate.multistateanalyzer._compute_mbar_decorrelated_energies
                 assert n_unsampled_states == 0
                 n_total_states = n_sampled_states
-                energy_matrix = np.zeros([n_total_states, n_iterations*n_replicas])
+                energy_matrix = np.zeros([n_total_states, n_frames*n_replicas])
                 samples_per_state = np.zeros([n_total_states], dtype=int)
                 # Compute shift index for how many unsampled states there were.
                 # This assumes that we set an equal number of unsampled states at the end points.
@@ -405,9 +410,9 @@ def run(kwargs):
                 decorrelated_u_ln = energy_matrix
                 decorrelated_N_l = samples_per_state
 
-                """
-                Observables
-                """
+                #
+                # Observables
+                #
                 # Remove equilibrated and decorrelated data from observable
                 o_kn = dict_per_residue[residue_key][coupling_key]
                 _o_kn = copy.deepcopy(o_kn)
@@ -425,9 +430,9 @@ def run(kwargs):
         dict_decoupled_data[residue_key] = tmp_dict
 
 
-    # -----
-    # MBAR without bootstrap
-    # -----
+    #
+    # MBAR
+    #
     print(">analyze with mbar")
 
     dict_reweighted_coupling = {}  # key: residue
@@ -452,9 +457,9 @@ def run(kwargs):
 
 
 
-    # -----
-    # EXPORT (decorrelated data and plots)
-    # -----
+    # 
+    # Save (decorrelated data and plots)
+    # 
     print(">plot")
     plot(dict_reweighted_coupling, output_prefix, benchmark_path, seq)
 
@@ -480,6 +485,9 @@ def run(kwargs):
 @click.option("--seq", required=True, type=click.Choice(["aaaa", "cccc", "uuuu", "gacc", "caau"]), help="tetramer sequence")
 @click.option("--benchmark_path", required=True, type=str, help="path to benchmark directory")
 @click.option("--output_prefix", default=".", type=str, help="output prefix to save output files")
+@click.option("--start_frame", default=0, help="Index of the first frame to include in the trajectory. Index 0 corresponds to the minimization step.")
+@click.option("--end_frame", default=-1, help="Index of the last frame to include in the trajectory")
+@click.option("--skip_frame", default=1, help="Extract every n frames from the trajectory")
 def cli(**kwargs):
     run(kwargs)
 
